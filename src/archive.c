@@ -124,7 +124,7 @@ int ArchiveInit(int options, const char* file_name)
     archive = malloc(sizeof(struct ArchiveHandle));
     if(archive == NULL)
         return ARCHIVE_ERROR_NOT_INITIALIZED;
-    memset(archive, 0, sizeof(sizeof(struct ArchiveHandle)));
+    memset(archive, 0, sizeof(struct ArchiveHandle));
     //InitializeListHead(&archive->log_files);
     if (archive->is_critical_section_init == 0) {
         InitializeCriticalSection(&archive->critical_section);
@@ -165,6 +165,7 @@ void ArchiveCleanup()
 
 inline int ArchiveLogInternal(const char* format, va_list args)
 {
+    // TODO Put that on stack?
     EnterCriticalSection(&archive->critical_section);
     memset(archive->buffer, 0, 0x10000);
     vsprintf_s(archive->buffer, 0x10000 - 1, format, args);
