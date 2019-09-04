@@ -112,7 +112,7 @@ int ArchiveSetupLoggingDirectory(const char* file_name)
                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH,
                                       NULL);
     if(archive->file_handle == INVALID_HANDLE_VALUE)
-        return ARCHIVE_INVALID_FILE_HANDLE;
+        return ARCHIVE_ERROR_INVALID_FILE_HANDLE;
     archive->use_log_file = 1;
     return ARCHIVE_SUCCESS;
 }
@@ -123,7 +123,7 @@ int ArchiveInit(int options, const char* file_name)
 
     archive = malloc(sizeof(struct ArchiveHandle));
     if(archive == NULL)
-        return ARCHIVE_ERROR_ALLOCATING;
+        return ARCHIVE_ERROR_NOT_INITIALIZED;
     memset(archive, 0, sizeof(sizeof(struct ArchiveHandle)));
     //InitializeListHead(&archive->log_files);
     if (archive->is_critical_section_init == 0) {
