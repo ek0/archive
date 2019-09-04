@@ -19,7 +19,7 @@ endif()
 # Generating configuration macros
 # -----------------------------------------------------------------------------
 generate_export_header("archive" BASE_NAME "ARCHIVE" 
-                              EXPORT_FILE_NAME "archive_export_config.h")
+                                 EXPORT_FILE_NAME "archive_export_config.h")
 target_include_directories("archive"
     PUBLIC "include" ${PROJECT_BINARY_DIR})
 

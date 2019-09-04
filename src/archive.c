@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "archive.h"
+
 struct LogFileInfo
 {
     LIST_ENTRY next;
@@ -21,6 +23,7 @@ struct ArchiveHandle
     int is_critical_section_init;
     int is_init;
     int use_console;
+    int use_log_file;
     char buffer[0x10000];
     HANDLE file_handle;
     LIST_ENTRY log_files;
@@ -28,17 +31,14 @@ struct ArchiveHandle
 
 static struct ArchiveHandle *archive = NULL;
 
-void ArchiveSetupLoggingDirectory()
+int ArchiveOpenTemporaryFile()
 {
-    if(archive == NULL)
-        return;
     SYSTEMTIME local_time;
+
+    if(archive == NULL)
+        return ARCHIVE_ERROR_NOT_INITIALIZED;
     GetLocalTime(&local_time);
     GetCurrentDirectory(MAX_PATH - 1, archive->current_directory);
-    if (archive->is_critical_section_init == 0) {
-        InitializeCriticalSection(&archive->critical_section);
-        archive->is_critical_section_init = 1;
-    }
     sprintf_s(archive->log_directory,
               256,
               "%s\\%02d-%02d-%04d_%02d-%02d-%02d.txt",
@@ -49,7 +49,60 @@ void ArchiveSetupLoggingDirectory()
               local_time.wHour,
               local_time.wMinute,
               local_time.wSecond);
-    //CreateDirectory(archive->log_directory, NULL);
+    return ARCHIVE_SUCCESS;
+}
+
+int MakeConsole(void)
+{
+    DWORD dwMode;
+    struct _CONSOLE_SCREEN_BUFFER_INFO sbi;
+    HANDLE hStd;
+    FILE *stream;
+
+    if (!AllocConsole()) {
+        FreeConsole();
+        if (!AllocConsole()) {
+            return ARCHIVE_ERROR_CONSOLE;
+        }
+    }
+    hStd = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleMode(hStd, (LPDWORD)&dwMode);
+    SetConsoleMode(hStd, dwMode & 0xFFFFFFEF);
+    GetConsoleScreenBufferInfo(hStd, &sbi);
+    sbi.dwSize.Y = 500;
+    SetConsoleScreenBufferSize(hStd, sbi.dwSize);
+    freopen_s(&stream, "conin$", "r", stdin);
+    freopen_s(&stream, "conout$", "w", stdout);
+    freopen_s(&stream, "conout$", "w", stderr);
+    archive->use_console = 1;
+    return ARCHIVE_SUCCESS;
+}
+
+
+/**
+ * Open a new file once the session has been previously initialized
+ */
+void ArchiveOpenNewFile(const char* path)
+{
+    // TODO
+}
+
+int ArchiveSetupLoggingDirectory(const char* file_name)
+{
+    int status = 0;
+
+    if(archive == NULL)
+        return ARCHIVE_ERROR_NOT_INITIALIZED;
+    if(file_name == NULL)
+    {
+        status = ArchiveOpenTemporaryFile();
+        if(status != ARCHIVE_SUCCESS)
+            return status;
+    }
+    else
+    {
+        memcpy(&archive->log_directory, file_name, 256);
+    }
     // TODO: Temporary
     archive->file_handle = CreateFile(archive->log_directory,
                                       GENERIC_READ | GENERIC_WRITE,
@@ -58,16 +111,39 @@ void ArchiveSetupLoggingDirectory()
                                       CREATE_ALWAYS,
                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH,
                                       NULL);
-    archive->is_init = 1;
+    if(archive->file_handle == INVALID_HANDLE_VALUE)
+        return ARCHIVE_INVALID_FILE_HANDLE;
+    archive->use_log_file = 1;
+    return ARCHIVE_SUCCESS;
 }
 
-void ArchiveInit(int use_console)
+int ArchiveInit(int options, const char* file_name)
 {
+    int status = 0;
+
     archive = malloc(sizeof(struct ArchiveHandle));
+    if(archive == NULL)
+        return ARCHIVE_ERROR_ALLOCATING;
     memset(archive, 0, sizeof(sizeof(struct ArchiveHandle)));
     //InitializeListHead(&archive->log_files);
-    ArchiveSetupLoggingDirectory();
-    archive->use_console = use_console;
+    if (archive->is_critical_section_init == 0) {
+        InitializeCriticalSection(&archive->critical_section);
+        archive->is_critical_section_init = 1;
+    }
+    if(!(options & ARCHIVE_NO_LOG_FILE))
+    {
+        status = ArchiveSetupLoggingDirectory(file_name);
+        if(status != ARCHIVE_SUCCESS)
+            return status;
+    }
+    if(options & ARCHIVE_USE_CONSOLE)
+    {
+        status = MakeConsole();
+        if(status != ARCHIVE_SUCCESS)
+            return status;
+    }
+    archive->is_init = 1;
+    return ARCHIVE_SUCCESS;
 }
 
 void ArchiveCleanup()
@@ -81,69 +157,19 @@ void ArchiveCleanup()
         //{
         //    entry = RemoveHeadList()
         //}
-        CloseHandle(archive->file_handle);
+        if(archive->use_log_file)
+            CloseHandle(archive->file_handle);
         free(archive);
     }
 }
 
-VOID ArchiveLogToFile(void *data, size_t size)
+inline int ArchiveLogInternal(const char* format, va_list args)
 {
-    static int is_init = 0;
-    FILE *fFpbin = NULL;
-    static HANDLE file_handle = INVALID_HANDLE_VALUE;
-
     EnterCriticalSection(&archive->critical_section);
-    if(archive->file_handle != NULL) {
-        DWORD lpNumberOfBytesWritten;
-        WriteFile(archive->file_handle, data, (DWORD)size, &lpNumberOfBytesWritten, NULL);
-    }
-    LeaveCriticalSection(&archive->critical_section);
-}
-
-struct LogFileInfo* ArchiveGetFileInfoFromThreadId(uint32_t thread_id)
-{
-    LIST_ENTRY *entry = NULL;
-
-    while(entry != &archive->log_files)
-    {
-        entry = RemoveHeadList(&archive->log_files);
-    }
-    return NULL;
-}
-
-struct LogFileInfo* ArchiveCreateLogFile(uint32_t thread_id)
-{
-    struct LogFileInfo *file_info = NULL;
-    
-    file_info = malloc(sizeof(struct LogFileInfo));
-    sprintf_s(file_info->file_path,
-              MAX_PATH,
-              "%s\\%d.txt",
-              &archive->log_directory,
-              thread_id);
-    file_info->file_handle = CreateFile(file_info->file_path,
-                                        GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                        NULL,
-                                        CREATE_ALWAYS,
-                                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH,
-                                        NULL);
-    InsertHeadList(&archive->log_files, &file_info->next);
-    return NULL;
-}
-
-inline void ArchiveLogInternal(const char* format, va_list args)
-{
-    //struct LogFileInfo *log_file = NULL;
-    //uint32_t current_tid = 0;
-    //va_list args;
-
-    EnterCriticalSection(&archive->critical_section);
-    //va_start(args, format);
     memset(archive->buffer, 0, 0x10000);
     vsprintf_s(archive->buffer, 0x10000 - 1, format, args);
-    //va_end(args);
     if(!archive->is_init) {
-        return;
+        return ARCHIVE_ERROR_NOT_INITIALIZED;
     }
     if(archive->file_handle != NULL) {
         DWORD lpNumberOfBytesWritten;
@@ -158,33 +184,40 @@ inline void ArchiveLogInternal(const char* format, va_list args)
     LeaveCriticalSection(&archive->critical_section);
 }
 
-void ArchiveLog(const char* format, ...)
+int ArchiveLog(const char* format, ...)
 {
+    int status = 0;
     va_list args;
 
     va_start(args, format);
-    ArchiveLogInternal(format, args);
+    status = ArchiveLogInternal(format, args);
     va_end(args);
+    return status;
 }
 
-void ArchiveLogWithTs(const char* format, ...)
+int ArchiveLogWithTs(const char* format, ...)
 {
+    int status = 0;
     va_list args;
     SYSTEMTIME t; 
 
     GetLocalTime(&t);
-    ArchiveLog("[%.2d:%.2d:%.2d:%.4d] ",
-               t.wHour,
-               t.wMinute,
-               t.wSecond,
-               t.wMilliseconds);
+    status = ArchiveLog("[%.2d:%.2d:%.2d:%.4d] ",
+                         t.wHour,
+                         t.wMinute,
+                         t.wSecond,
+                         t.wMilliseconds);
+    if(status != ARCHIVE_SUCCESS)
+        return status;
     va_start(args, format);
-    ArchiveLogInternal(format, args);
+    status = ArchiveLogInternal(format, args);
     va_end(args);
+    return status;
 }
 
-void ArchiveHexDump(const uint8_t* data, size_t size)
+int ArchiveHexDump(const uint8_t* data, size_t size)
 {
+    int status = ARCHIVE_SUCCESS;
     unsigned char *p = (unsigned char*)data;
     unsigned char c;
     size_t n;
@@ -206,7 +239,7 @@ void ArchiveHexDump(const uint8_t* data, size_t size)
         sprintf_s(bytestr, sizeof(bytestr), "%c", c);
         strncat_s(charstr, sizeof(charstr), bytestr, sizeof(charstr) - strlen(charstr) - 1);
         if (n % 16 == 0) {
-            ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
+            status = ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
             //printf("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
             hexstr[0] = 0;
             charstr[0] = 0;
@@ -217,8 +250,8 @@ void ArchiveHexDump(const uint8_t* data, size_t size)
         p++;
     }
     if (strlen(hexstr) > 0) {
-        ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
+        status = ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
         //printf("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
     }
-    //LeaveCriticalSection(&CriticalSection);
+    return status;
 }

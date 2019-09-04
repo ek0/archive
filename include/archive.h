@@ -10,7 +10,14 @@ extern "C"
 {
 #endif
 
-#define USE_CONSOLE 1
+#define ARCHIVE_SUCCESS               0x00000000
+#define ARCHIVE_ERROR_CONSOLE         0x00000001
+#define ARCHIVE_ERROR_NOT_INITIALIZED 0x00000002
+#define ARCHIVE_ERROR_ALLOCATING      0x00000003
+#define ARCHIVE_INVALID_FILE_HANDLE   0x00000004
+
+#define ARCHIVE_USE_CONSOLE 0x00000001
+#define ARCHIVE_NO_LOG_FILE 0x00000002
 
 #define ARCHIVE_LOG_TS(fmt, ...) ArchiveLogWithTs("%s: ", __FUNCTION__); \
                                  ArchiveLog(fmt, __VA_ARGS__);
@@ -18,11 +25,11 @@ extern "C"
 #define ARCHIVE_LOG(fmt, ...) ArchiveLog("%s: ", __FUNCTION__); \
                               ArchiveLog(fmt, __VA_ARGS__);
 
-void ARCHIVE_EXPORT ArchiveInit(int);
+int ARCHIVE_EXPORT  ArchiveInit(int, const char*);
 void ARCHIVE_EXPORT ArchiveCleanup();
-void ARCHIVE_EXPORT ArchiveLog(const char* format, ...);
-void ARCHIVE_EXPORT ArchiveLogWithTs(const char* format, ...);
-void ARCHIVE_EXPORT ArchiveHexDump(const uint8_t* data, size_t size);
+int ARCHIVE_EXPORT  ArchiveLog(const char* format, ...);
+int ARCHIVE_EXPORT  ArchiveLogWithTs(const char* format, ...);
+int ARCHIVE_EXPORT  ArchiveHexDump(const uint8_t* data, size_t size);
 
 #ifdef __cplusplus
 }
