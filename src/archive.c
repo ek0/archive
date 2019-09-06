@@ -24,7 +24,6 @@ struct ArchiveHandle
     int is_init;
     int use_console;
     int use_log_file;
-    char buffer[0x10000];
     HANDLE file_handle;
     LIST_ENTRY log_files;
 };
@@ -166,22 +165,23 @@ void ArchiveCleanup()
 inline int ArchiveLogInternal(const char* format, va_list args)
 {
     // TODO Put that on stack?
+    char buffer[0x10000];
     EnterCriticalSection(&archive->critical_section);
-    memset(archive->buffer, 0, 0x10000);
-    vsprintf_s(archive->buffer, 0x10000 - 1, format, args);
+    memset(buffer, 0, 0x10000);
+    vsprintf_s(buffer, 0x10000 - 1, format, args);
     if(!archive->is_init) {
         return ARCHIVE_ERROR_NOT_INITIALIZED;
     }
     if(archive->file_handle != NULL) {
         DWORD lpNumberOfBytesWritten;
         WriteFile(archive->file_handle,
-                  &archive->buffer,
-                  (DWORD)strlen(archive->buffer),
+                  buffer,
+                  (DWORD)strlen(buffer),
                   &lpNumberOfBytesWritten,
                   NULL);
     }
     if(archive->use_console)
-        printf("%s", &archive->buffer);
+        printf("%s", buffer);
     LeaveCriticalSection(&archive->critical_section);
 }
 
