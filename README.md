@@ -78,7 +78,7 @@ int main(int argc, char** argv)
     ArchiveInit(0, NULL);            // Will create 03-09-2019_19-53-23.txt for example
     ARCHIVE_LOG("My Awesome Log\n"); // Will output "main: My Awesome Log"
     ArchiveLog("Second line\n");     // Will output "Second line"
-    ARCHVIE_LOG_TS("Third line\n");  // Will output "[19:53:24:0782] main: Third line"
+    ARCHIVE_LOG_TS("Third line\n");  // Will output "[19:53:24:0782] main: Third line"
     ArchiveLogWithTs("Fourth\n");    // Will output "[19:53:24:0971] Fourth"
     ArchiveCleanup();
     return 0;
