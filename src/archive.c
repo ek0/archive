@@ -17,8 +17,8 @@ struct LogFileInfo
 
 struct ArchiveHandle
 {
-    char log_directory[256];
-    char current_directory[256];
+    char log_directory[MAX_PATH];
+    char current_directory[MAX_PATH];
     CRITICAL_SECTION critical_section;
     int is_critical_section_init;
     int is_init;
@@ -39,12 +39,12 @@ int ArchiveOpenTemporaryFile()
     GetLocalTime(&local_time);
     GetCurrentDirectory(MAX_PATH - 1, archive->current_directory);
     sprintf_s(archive->log_directory,
-              256,
-              "%s\\%02d-%02d-%04d_%02d-%02d-%02d.txt",
+              260,
+              "%s\\%04d-%02d-%02d_%02d-%02d-%02d.txt",
               archive->current_directory,
-              local_time.wDay,
-              local_time.wMonth,
               local_time.wYear,
+              local_time.wMonth,
+              local_time.wDay,
               local_time.wHour,
               local_time.wMinute,
               local_time.wSecond);
@@ -100,7 +100,7 @@ int ArchiveSetupLoggingDirectory(const char* file_name)
     }
     else
     {
-        memcpy(&archive->log_directory, file_name, 256);
+        memcpy(&archive->log_directory, file_name, MAX_PATH);
     }
     // TODO: Temporary
     archive->file_handle = CreateFile(archive->log_directory,
@@ -164,14 +164,14 @@ void ArchiveCleanup()
 
 inline int ArchiveLogInternal(const char* format, va_list args)
 {
-    // TODO Put that on stack?
-    char buffer[0x10000];
-    EnterCriticalSection(&archive->critical_section);
-    memset(buffer, 0, 0x10000);
-    vsprintf_s(buffer, 0x10000 - 1, format, args);
+    // 0x3000 to not use too much stack size.
+    char buffer[0x3000];
     if(!archive->is_init) {
         return ARCHIVE_ERROR_NOT_INITIALIZED;
     }
+    EnterCriticalSection(&archive->critical_section);
+    memset(buffer, 0, 0x3000);
+    vsprintf_s(buffer, 0x3000 - 1, format, args);
     if(archive->file_handle != NULL) {
         DWORD lpNumberOfBytesWritten;
         WriteFile(archive->file_handle,

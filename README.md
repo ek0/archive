@@ -17,7 +17,7 @@ Can be one of the following values:
 - `NO_LOG_FILE` Does not pop a log file
 
 #### `path`
-Name of the log file. If `path` is NULL the log file will be named using the following format: `DD-MM-YYYY_HH-MN-SEC.txt` where:
+Name of the log file. If `path` is NULL the log file will be named using the following format: `YYYY-MM-DD_HH-MN-SEC.txt` where:
 ```
 YYYY = Current Year at initialization
 MM = Curent Month at initialization
@@ -75,7 +75,7 @@ Archive can be use as the following:
 ```c
 int main(int argc, char** argv)
 {
-    ArchiveInit(0, NULL);            // Will create 03-09-2019_19-53-23.txt for example
+    ArchiveInit(0, NULL);            // Will create 2019-09-03_19-53-23.txt for example (3rd of september 2019)
     ARCHIVE_LOG("My Awesome Log\n"); // Will output "main: My Awesome Log"
     ArchiveLog("Second line\n");     // Will output "Second line"
     ARCHVIE_LOG_TS("Third line\n");  // Will output "[19:53:24:0782] main: Third line"
