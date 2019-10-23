@@ -3,3 +3,4 @@ cmake64/
 cmake/
 out/
 .vs/
+CMakeSettings.json

@@ -183,11 +183,12 @@ inline int ArchiveLogInternal(const char* format, va_list args)
     if(archive->use_console)
         printf("%s", buffer);
     LeaveCriticalSection(&archive->critical_section);
+    return ARCHIVE_SUCCESS;
 }
 
 int ArchiveLog(const char* format, ...)
 {
-    int status = 0;
+    int status = ARCHIVE_SUCCESS;
     va_list args;
 
     va_start(args, format);
@@ -198,7 +199,7 @@ int ArchiveLog(const char* format, ...)
 
 int ArchiveLogWithTs(const char* format, ...)
 {
-    int status = 0;
+    int status = ARCHIVE_SUCCESS;
     va_list args;
     SYSTEMTIME t; 
 
@@ -241,7 +242,6 @@ int ArchiveHexDump(const uint8_t* data, size_t size)
         strncat_s(charstr, sizeof(charstr), bytestr, sizeof(charstr) - strlen(charstr) - 1);
         if (n % 16 == 0) {
             status = ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
-            //printf("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
             hexstr[0] = 0;
             charstr[0] = 0;
         }
@@ -252,7 +252,6 @@ int ArchiveHexDump(const uint8_t* data, size_t size)
     }
     if (strlen(hexstr) > 0) {
         status = ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
-        //printf("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
     }
     return status;
 }
