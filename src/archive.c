@@ -1,19 +1,20 @@
 
-#include "mlist.h"
+
 
 #include <Windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 
 #include "archive.h"
 
-struct LogFileInfo
-{
-    LIST_ENTRY next;
-    uint32_t   thread_id;
-    char       file_path[256];
-    HANDLE     file_handle;
-};
+//struct LogFileInfo
+//{
+//    LIST_ENTRY next;
+//    uint32_t   thread_id;
+//    char       file_path[256];
+//    HANDLE     file_handle;
+//};
 
 struct ArchiveHandle
 {
@@ -147,15 +148,8 @@ int ArchiveInit(int options, const char* file_name)
 
 void ArchiveCleanup()
 {
-    //LIST_ENTRY *entry;
-    //struct LogFileInfo *info;
-
     if(archive != NULL)
     {
-        //while(!IsListEmpty(&archive->log_files))
-        //{
-        //    entry = RemoveHeadList()
-        //}
         if(archive->use_log_file)
             CloseHandle(archive->file_handle);
         free(archive);
@@ -164,24 +158,31 @@ void ArchiveCleanup()
 
 inline int ArchiveLogInternal(const char* format, va_list args)
 {
-    // 0x3000 to not use too much stack size.
-    char buffer[0x3000];
+    char* buffer = NULL;
+    size_t size = 0;
+    va_list copy;
+
     if(!archive->is_init) {
         return ARCHIVE_ERROR_NOT_INITIALIZED;
     }
+    va_copy(copy, args);
+    size = _vscprintf(format, args);
+    buffer = malloc(size + 1);
+    if(buffer == NULL)
+        return ARCHIVE_ERROR_ALLOCATING_BUFFER;
     EnterCriticalSection(&archive->critical_section);
-    memset(buffer, 0, 0x3000);
-    vsprintf_s(buffer, 0x3000 - 1, format, args);
+    vsprintf_s(buffer, size + 1, format, copy);
     if(archive->file_handle != NULL) {
         DWORD lpNumberOfBytesWritten;
         WriteFile(archive->file_handle,
                   buffer,
-                  (DWORD)strlen(buffer),
+                  (DWORD)size,
                   &lpNumberOfBytesWritten,
                   NULL);
     }
     if(archive->use_console)
         printf("%s", buffer);
+    free(buffer);
     LeaveCriticalSection(&archive->critical_section);
     return ARCHIVE_SUCCESS;
 }
@@ -201,7 +202,7 @@ int ArchiveLogWithTs(const char* format, ...)
 {
     int status = ARCHIVE_SUCCESS;
     va_list args;
-    SYSTEMTIME t; 
+    SYSTEMTIME t;
 
     GetLocalTime(&t);
     status = ArchiveLog("[%.2d:%.2d:%.2d:%.4d] ",
@@ -217,41 +218,60 @@ int ArchiveLogWithTs(const char* format, ...)
     return status;
 }
 
-int ArchiveHexDump(const uint8_t* data, size_t size)
+int ArchiveHexDump(const void* data, size_t size)
 {
     int status = ARCHIVE_SUCCESS;
-    unsigned char *p = (unsigned char*)data;
+    unsigned char* p = (unsigned char*)data;
     unsigned char c;
     size_t n;
-    char bytestr[4] = {0};
-    char addrstr[10] = {0};
-    char hexstr[16 * 3 + 5] = {0};
-    char charstr[16 * 1 + 5] = {0};
+    int off = 0;
+    size_t hex_buffer_size = 0;
+    char* tmp_buffer = NULL;// "[XXXXXXXX] XX XX XX XX XX XX XX XX   XX XX XX XX XX XX XX XX   ................\n
+                            //  \   10   /\                      50                        /\         20       /
+    char bytestr[4] = { 0 };
+    char addrstr[10] = { 0 };
+    char hexstr[50] = { 0 };
+    char charstr[20] = { 0 };
 
-    for (n = 1; n <= size; n++) {
-        if (n % 16 == 1) {
-            sprintf_s(addrstr, sizeof(addrstr), "%.4x", (unsigned int)((ULONG_PTR)p - (ULONG_PTR)data));
+    hex_buffer_size = ((size / 16) * 80) + 1;
+    if(size % 16)
+        hex_buffer_size += 80;
+    tmp_buffer = malloc(hex_buffer_size);
+    if(tmp_buffer == NULL)
+        return ARCHIVE_ERROR_ALLOCATING_BUFFER;
+    memset(tmp_buffer, 0, hex_buffer_size);
+    for(n = 1; n <= size; n++) {
+        if(n % 16 == 1) {
+            // Data offset
+            sprintf_s(addrstr, sizeof(addrstr), "[%.4x]", (unsigned int)((ULONG_PTR)p - (ULONG_PTR)data));
         }
         c = *p;
-        if (isprint(c) == 0) {
+        if(isprint(c) == 0)
             c = '.';
-        }
+        // Stringify byte to hex
         sprintf_s(bytestr, sizeof(bytestr), "%02X ", *p);
         strncat_s(hexstr, sizeof(hexstr), bytestr, sizeof(hexstr) - strlen(hexstr) - 1);
+        // Building ASCII value for byte
         sprintf_s(bytestr, sizeof(bytestr), "%c", c);
         strncat_s(charstr, sizeof(charstr), bytestr, sizeof(charstr) - strlen(charstr) - 1);
-        if (n % 16 == 0) {
-            status = ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
+        if(n % 16 == 0) {
+            off += sprintf_s(tmp_buffer + off, hex_buffer_size - off, "%s %-50.50s %s\n", addrstr, hexstr, charstr);
+            // Reinitializing local temporary buffers.
             hexstr[0] = 0;
             charstr[0] = 0;
         }
-        else if (n % 8 == 0) {
-            strncat_s(hexstr, sizeof(hexstr), "  ", sizeof(hexstr)-strlen(hexstr)-1);
+        else if(n % 8 == 0) {
+            // Splitting hexbuffer in two 8 bytes parts
+            strncat_s(hexstr, sizeof(hexstr), "  ", sizeof(hexstr) - strlen(hexstr) - 1);
         }
         p++;
     }
-    if (strlen(hexstr) > 0) {
-        status = ArchiveLog("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
+    if(strlen(hexstr) > 0) {
+        // Print remaining bytes
+        sprintf_s(tmp_buffer + off, hex_buffer_size - off, "%s %-50.50s %s\n", addrstr, hexstr, charstr);
     }
+    status = ArchiveLog("%s", tmp_buffer);
+    free(tmp_buffer);
+
     return status;
 }

@@ -14,6 +14,7 @@ extern "C"
 #define ARCHIVE_ERROR_CONSOLE               0x00000001
 #define ARCHIVE_ERROR_NOT_INITIALIZED       0x00000002
 #define ARCHIVE_ERROR_INVALID_FILE_HANDLE   0x00000003
+#define ARCHIVE_ERROR_ALLOCATING_BUFFER     0x00000004
 
 #define ARCHIVE_USE_CONSOLE 0x00000001
 #define ARCHIVE_NO_LOG_FILE 0x00000002
@@ -28,7 +29,7 @@ int ARCHIVE_EXPORT  ArchiveInit(int, const char*);
 void ARCHIVE_EXPORT ArchiveCleanup();
 int ARCHIVE_EXPORT  ArchiveLog(const char* format, ...);
 int ARCHIVE_EXPORT  ArchiveLogWithTs(const char* format, ...);
-int ARCHIVE_EXPORT  ArchiveHexDump(const uint8_t* data, size_t size);
+int ARCHIVE_EXPORT  ArchiveHexDump(const void* data, size_t size);
 
 #ifdef __cplusplus
 }

@@ -13,8 +13,8 @@ Initialize the archive handler.
 #### `options`
 Can be one of the following values:
 
-- `USE_CONSOLE` Pop up a new console
-- `NO_LOG_FILE` Does not pop a log file
+- `ARCHIVE_USE_CONSOLE` Pop up a new console
+- `ARCHIVE_NO_LOG_FILE` Does not pop a log file
 
 #### `path`
 Name of the log file. If `path` is NULL the log file will be named using the following format: `YYYY-MM-DD_HH-MN-SEC.txt` where:
@@ -57,7 +57,7 @@ Optional arguments.
 `ARCHIVE_ERROR_NOT_INITIALIZED` if Archive has not been initialized through `ArchiveInit`
 ## ArchiveHexDump
 ```c
-void ArchiveHexDump(const uint8_t* data, size_t size);
+void ArchiveHexDump(const void* data, size_t size);
 ```
 Utility function used to display binary data into an hexadecimal. To be called after `ArchiveInit`.
 ### Parameters
